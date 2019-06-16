@@ -1,2 +1,2 @@
 # CodeBank
-Storae for my code
+Storage for my code
