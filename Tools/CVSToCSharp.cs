@@ -1,3 +1,9 @@
+/// Last modification date : 
+/// Last feature added : 
+
+// Reference script to develop a tool for designer that allows them to input data into a csv file and load it to
+// a Unity scripted object.
+
 using System.Collection;
 using System.Collection.Generic;
 using UnityEngine;
