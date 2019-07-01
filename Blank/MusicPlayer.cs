@@ -37,6 +37,8 @@ public class MusicPlayer : MonoBehaviour
     private string tempName;
     private Type[] components = new Type[2];
 
+    public bool debugOn;
+
     private void Awake()
     {
         musicPlayer = GetComponent<MusicPlayer>();
@@ -52,7 +54,7 @@ public class MusicPlayer : MonoBehaviour
         {
             SetupAudioSources();
         }
-        else ErrorLog(0);
+        else if (debugOn) ErrorLog(0);
     }
 
     private void Update()
@@ -69,7 +71,7 @@ public class MusicPlayer : MonoBehaviour
         {
             if (AllClipsInactive())
             {
-                Debug.Log("none playing & none Active");
+                if(debugOn) Debug.Log("none playing & none Active");
             }
             else
             {
@@ -239,7 +241,7 @@ public class MusicPlayer : MonoBehaviour
             {
                 activeClip[tempInt] = true;
             }
-            else ErrorLog(1);
+            else if (debugOn) ErrorLog(1);
         }
     }
 
@@ -257,7 +259,7 @@ public class MusicPlayer : MonoBehaviour
             {
                 activeClip[tempInt] = false;
             }
-            else ErrorLog(1);
+            else if (debugOn) ErrorLog(1);
         }
     }
 
