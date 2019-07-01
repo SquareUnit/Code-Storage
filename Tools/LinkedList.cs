@@ -1,3 +1,10 @@
+/// Designed by Félix Desrosiers-Dorval
+/// Last modification date : 
+/// Last feature added : 
+/// https://github.com/SquareUnit/Code-Storage
+
+// Currently making a linked list system to make my own waypoint tool for Unity.
+
 using System.Collections;
 using System.Collections.Generic;
 using System.Text;
