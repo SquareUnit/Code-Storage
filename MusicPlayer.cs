@@ -1,120 +1,185 @@
+/// Designed by Félix Desrosiers-Dorval
+/// Last modification date : 2019-07-01
+/// Last feature added : LowPassFilter slider now updating when valus is changed
+/// https://github.com/SquareUnit/Code-Storage
+
+// Script requirements : System made for looping music tracks seamlessly into each other. At least two audioclips, 
+// one in each of the two tracks a required. All audioslips must be of the same length. Audioclip length should aim 
+// to have at maximum 2 decimals that round perfectly to avoid float imprecision.
+
 using System;
 using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 using UnityEditor;
-using UnityEngine.Experimental.UIElements;
 
 public class MusicPlayer : MonoBehaviour
 {
     private MusicPlayer musicPlayer;
+    private AudioSource[] audioSources;
     private AudioClip[] currMusicTrack;
     public AudioClip[] musicTrack01;
     public AudioClip[] musicTrack02;
-    private AudioSource[] musicSources;
+    private float[] clipsMaxVolume;
+    private bool[] activeClip;
     private AudioLowPassFilter[] lowFilters;
     [Tooltip("The volume for all instruments")]
     [Range(0.001f, 1.0f)] public float globalVolume;
     private float lastGlobalVolume;
     [Tooltip("The highest frequency that can be played by all instruments")]
     [Range(18, 5000)] public float globalCutoffFreq;
+    private float lastGlobalCutoffFreq;
     [Range(0.001f, 0.20f)] public float fadeInSpd = 0.05f;
     [Range(0.001f, 0.20f)] public float fadeOutSpd = 0.025f;
+    private bool fading;
 
-    private GameObject tempInstance;
+    private GameObject tempObject;
     private int counter = 0;
     private string tempName;
     private Type[] components = new Type[2];
-    private bool[] instrumentsActive = new bool[23];
 
     private void Awake()
     {
         musicPlayer = GetComponent<MusicPlayer>();
         components[0] = typeof(AudioSource);
         components[1] = typeof(AudioLowPassFilter);
+        globalVolume = 1.0f;
+        globalCutoffFreq = 500;
     }
 
     private void Start()
     {
-        globalVolume = 1.0f;
-        globalCutoffFreq = 500;
         if (musicTrack01.Length != 0 && musicTrack02.Length != 0)
         {
-            SetUpMusicPLayer();
-            SetTracksAndFilters();
+            SetupAudioSources();
         }
         else ErrorLog(0);
     }
 
     private void Update()
     {
-        CheckGlobalVolumeSlider();
-        TogleInstruments();
+        UpdateGlobalVolumeInspector();
+        UpdateGlobalFrequencyInspector();
+        ToggleClipActivity();
+        SetClipsVolume();
     }
 
-    private void SetUpMusicPLayer()
+    private void FixedUpdate()
     {
-        int instrumentsCount = musicTrack01.Length + musicTrack02.Length;
-        musicSources = new AudioSource[instrumentsCount];
-        lowFilters = new AudioLowPassFilter[instrumentsCount];
+        if (!CheckIfAnyClipPlaying())
+        {
+            if (AllClipsInactive())
+            {
+                Debug.Log("none playing & none Active");
+            }
+            else
+            {
+                PlayActiveClips();
+            }
+        }
+        else
+        {
+            int firstClipFound = FirstActiveClip();
+            // Here I am checking if the playing audioClip end before the current frame end.
+            if (audioSources[firstClipFound].time + Time.fixedDeltaTime >= audioSources[firstClipFound].clip.length)
+            {
+                float delay = audioSources[firstClipFound].time + Time.fixedDeltaTime - audioSources[firstClipFound].clip.length;
+                StartCoroutine(WaitForLoopEnd(delay));
+            }
+        }
+    }
 
-        for (int i = 0; i < musicSources.Length; i++)
+    public IEnumerator WaitForLoopEnd(float delay)
+    {
+        PlayActiveClips();
+        fading = true;
+        Invoke("StopFading", 1.0f);
+        Debug.Log("WaitForLoopEnd coroutine has finished");
+        yield return new WaitForSeconds(delay);
+    }
+
+    private void StopFading()
+    {
+        fading = false;
+    }
+
+    /// <summary> Initial setup for the music player. Run once at start. </summary>
+    private void SetupAudioSources()
+    {
+        int clipCount = musicTrack01.Length + musicTrack02.Length;
+        audioSources = new AudioSource[clipCount];
+        lowFilters = new AudioLowPassFilter[clipCount];
+        clipsMaxVolume = new float[clipCount];
+        activeClip = new bool[clipCount];
+
+        for (int i = 0; i < audioSources.Length; i++)
         {
             tempName = "Instrument" + counter.ToString();
             counter++;
-            tempInstance = new GameObject(tempName, components);
-            tempInstance.transform.SetParent(musicPlayer.transform);
-            musicSources[i] = tempInstance.GetComponentInChildren<AudioSource>();
-            lowFilters[i] = tempInstance.GetComponentInChildren<AudioLowPassFilter>();
+            tempObject = new GameObject(tempName, components);
+            tempObject.transform.SetParent(musicPlayer.transform);
+            audioSources[i] = tempObject.GetComponentInChildren<AudioSource>();
+            lowFilters[i] = tempObject.GetComponentInChildren<AudioLowPassFilter>();
+
+            audioSources[i].playOnAwake = false;
+            audioSources[i].volume = 0.0f;
+            lowFilters[i].cutoffFrequency = 500;
+            lowFilters[i].enabled = false;
+            clipsMaxVolume[i] = 1.0f;
+
+            SetupTracks(i);
         }
     }
 
     /// <summary> Set up and assign all audioclips to an AudioSource</summary>
-    private void SetTracksAndFilters()
+    private void SetupTracks(int i)
     {
-        for (int i = 0; i < musicSources.Length; i++)
+        if (i < musicTrack01.Length)
         {
-            if (i < musicTrack01.Length)
+            audioSources[i].clip = musicTrack01[i];
+        }
+        else
+        {
+            audioSources[i].clip = musicTrack02[i - musicTrack01.Length];
+        }
+    }
+
+    /// <summary> Play all active instruments </summary>
+    private void PlayActiveClips()
+    {
+        for (int i = 0; i < audioSources.Length; i++)
+        {
+            // If the clip is active or inactive but still needing a fade out
+            if (activeClip[i] || (!activeClip[i] && audioSources[i].volume >= 0.001f))
             {
-                musicSources[i].clip = musicTrack01[i];
-                musicSources[i].loop = true;
-                musicSources[i].volume = 0;
-                musicSources[i].Play();
-                lowFilters[i].cutoffFrequency = 500;
-                lowFilters[i].enabled = false;
-            }
-            else
-            {
-                musicSources[i].clip = musicTrack02[i - musicTrack01.Length];
-                musicSources[i].loop = true;
-                musicSources[i].volume = 0;
-                musicSources[i].Play();
-                lowFilters[i].cutoffFrequency = 500;
-                lowFilters[i].enabled = false;
+                if (audioSources[i].volume <= 0.0f) audioSources[i].volume = 0.001f;
+                audioSources[i].Play();
+                fading = true;
+                Invoke("StopFading", 1.0f);
             }
         }
     }
 
     /// <summary> Play all the instruments of a music track</summary>
     /// <param name="trackToPlay"> The track you wish to play, call from music player script</param>
-    public void EnableMusicTrack(AudioClip[] trackToPlay)
+    public void PlayMusicTrack(AudioClip[] trackToPlay)
     {
         if (trackToPlay == musicTrack01)
         {
-            for (int i = 0; i < musicSources.Length; i++)
+            for (int i = 0; i < audioSources.Length; i++)
             {
-                if (i < musicTrack01.Length) instrumentsActive[i] = true;
-                else instrumentsActive[i] = false;
+                if (i < musicTrack01.Length) activeClip[i] = true;
+                else activeClip[i] = false;
             }
         }
         if (trackToPlay == musicTrack02)
         {
-            for (int i = 0; i < musicSources.Length; i++)
+            for (int i = 0; i < audioSources.Length; i++)
             {
-                if (i < musicTrack01.Length) instrumentsActive[i] = false;
-                else instrumentsActive[i] = true;
+                if (i < musicTrack01.Length) activeClip[i] = false;
+                else activeClip[i] = true;
             }
         }
+        if (!CheckIfAnyClipPlaying()) PlayActiveClips();
     }
 
     /// <summary> Play all the instruments of a music track</summary>
@@ -123,37 +188,40 @@ public class MusicPlayer : MonoBehaviour
     {
         if (trackToPlay == 1)
         {
-            for (int i = 0; i < musicSources.Length; i++)
+            for (int i = 0; i < audioSources.Length; i++)
             {
-                if (i < musicTrack01.Length) instrumentsActive[i] = true;
-                else instrumentsActive[i] = false;
+                if (i < musicTrack01.Length) activeClip[i] = true;
+                else activeClip[i] = false;
             }
         }
         if (trackToPlay == 2)
         {
-            for (int i = 0; i < musicSources.Length; i++)
+            for (int i = 0; i < audioSources.Length; i++)
             {
-                if (i < musicTrack01.Length) instrumentsActive[i] = false;
-                else instrumentsActive[i] = true;
+                if (i < musicTrack01.Length) activeClip[i] = false;
+                else activeClip[i] = true;
             }
         }
+        if (!CheckIfAnyClipPlaying()) PlayActiveClips();
     }
 
     /// <summary> Raise the volume of all instruments of all tracks in the music player to 1</summary>
     public void PlayAll()
     {
-        for (int i = 0; i < musicSources.Length; i++)
+        for (int i = 0; i < audioSources.Length; i++)
         {
-            instrumentsActive[i] = true;
+            activeClip[i] = true;
         }
     }
 
     /// <summary> Raise the volume of all instruments of all tracks in the music player to 0</summary>
     public void MuteAll()
     {
-        for (int i = 0; i < musicSources.Length; i++)
+        for (int i = 0; i < audioSources.Length; i++)
         {
-            instrumentsActive[i] = false;
+            activeClip[i] = false;
+            fading = true;
+            Invoke("StopFading", 1.0f);
         }
     }
 
@@ -167,9 +235,9 @@ public class MusicPlayer : MonoBehaviour
         {
             string tempString = i;
             int tempInt = int.Parse(tempString);
-            if (tempInt < musicSources.Length)
+            if (tempInt < audioSources.Length)
             {
-                instrumentsActive[tempInt] = true;
+                activeClip[tempInt] = true;
             }
             else ErrorLog(1);
         }
@@ -185,86 +253,126 @@ public class MusicPlayer : MonoBehaviour
         {
             string tempString = i;
             int tempInt = int.Parse(tempString);
-            if (tempInt < musicSources.Length)
+            if (tempInt < audioSources.Length)
             {
-                instrumentsActive[tempInt] = false;
+                activeClip[tempInt] = false;
             }
             else ErrorLog(1);
         }
     }
 
-    public void ToggleFilter()
+    /// <summary> Toggle on or off low pass filters for all tracks, active or not</summary>
+    public void ToggleLowPassFilters()
     {
-        for (int i = 0; i < musicSources.Length; i++)
+        for (int i = 0; i < audioSources.Length; i++)
         {
             lowFilters[i].enabled = !lowFilters[i].enabled;
             lowFilters[i].cutoffFrequency = globalCutoffFreq;
         }
     }
 
-    private void CheckGlobalVolumeSlider()
+    /// <summary> Unity events ready : Allow designers to change instruments volume individually. Will be overwritten if global volume value is changed.</summary>
+    public void SetInstrumentVolume(int clip, float volume)
     {
-        if (globalVolume != lastGlobalVolume)
-        {
-            globalVolume = (float)Math.Round(globalVolume, 3);
-            for (int i = 0; i < musicSources.Length; i++)
-            {
-                if (musicSources[i].volume != 0)
-                {
-                    musicSources[i].volume = globalVolume;
-                }
-            }
-        }
-        lastGlobalVolume = globalVolume;
+        audioSources[clip].volume = clipsMaxVolume[clip] = volume;
     }
 
-    public void TogleInstruments()
+    /// <summary> Allow designers to be able to add/remove an instrument with fkeys. fkeys and shift+fkeys can toggle the 24 first clips </summary>
+    public void ToggleClipActivity()
     {
-        for (int i = 0; i < musicSources.Length; i++)
+        for (int i = 0; i < audioSources.Length; i++)
         {
             if (InputsManager.instance.fKeyArray[i])
             {
-                instrumentsActive[i] = !instrumentsActive[i];
-            }
-
-            if (instrumentsActive[i] && musicSources[i].volume < globalVolume)
-            {
-                musicSources[i].volume += fadeInSpd;
-            }
-            if (!instrumentsActive[i] && musicSources[i].volume > 0)
-            {
-                musicSources[i].volume -= fadeOutSpd;
+                activeClip[i] = !activeClip[i];
             }
         }
     }
 
-    public void DisplayActive()
+    /// <summary> Fade audioclips in or out depending if there are set to active or not. Also stop the audioSource if it's volume fall to 0"/> </summary>
+    public void SetClipsVolume()
     {
-        string tempString = "List of active instruments : ";
-        bool temp = CheckIfEmpty();
+        for (int i = 0; i < audioSources.Length; i++)
+        {
+            if (fading)
+            {
+                if (activeClip[i])
+                {
+                    audioSources[i].volume += fadeInSpd;
+                    if (audioSources[i].volume > clipsMaxVolume[i]) audioSources[i].volume = clipsMaxVolume[i];
+                    else if (audioSources[i].volume > globalVolume) audioSources[i].volume = globalVolume;
+                    else if (audioSources[i].volume > 1.0f) audioSources[i].volume = 1.0f;
+                }
+                else // Clip is inactive
+                {
+                    audioSources[i].volume -= fadeOutSpd;
+                    if (audioSources[i].volume < 0.0f) audioSources[i].volume = 0.0f;
+                }
+            }
+
+            if(audioSources[i].volume == 0)
+            {
+                audioSources[i].Stop();
+            }
+        }
+    }
+
+    /// <summary> Return true if at leat one audioSource is playing an audioclip </summary>
+    public bool CheckIfAnyClipPlaying()
+    {
+        for (int i = 0; i < audioSources.Length; i++)
+        {
+            if (audioSources[i].isPlaying) return true;
+        }
+        return false;
+    }
+
+    /// <summary> Display in the console all instrument currently set active </summary>
+    public void PrintClip()
+    {
+        bool temp;
+        string activeClips = " <color=orange>List of active instruments : </color>";
+        string playingClips = "                          <color=orange>List of playing clips : </color>";
+        temp = AllClipsInactive();
         if (temp)
         {
-            tempString += "Empty";
-            Debug.Log(tempString);
+            activeClips += "Empty";
         }
         else
         {
-            for (int i = 0; i < musicSources.Length; i++)
+            for (int i = 0; i < audioSources.Length; i++)
             {
-                if (instrumentsActive[i])
+                if (activeClip[i])
                 {
-                    tempString += "|" + i.ToString();
+                    activeClips += "|" + i.ToString();
                 }
             }
-            Debug.Log(tempString);
         }
+        temp = AllClipsNotPlaying();
+        if (temp)
+        {
+            playingClips += "Empty";
+        }
+        else
+        {
+            for (int i = 0; i < audioSources.Length; i++)
+            {
+                if (audioSources[i].isPlaying)
+                {
+                    playingClips += "|" + i.ToString();
+                }
+            }
+        }
+
+        Debug.Log(activeClips + "\n" + playingClips);
     }
 
-    public bool CheckIfEmpty()
+    /// <summary> Returns true if no active clip is found </summary>
+    public bool AllClipsInactive()
     {
-        for (int i = 0; i < musicSources.Length; i++)
+        for (int i = 0; i < audioSources.Length; i++)
         {
-            if (instrumentsActive[i])
+            if (activeClip[i])
             {
                 return false;
             }
@@ -272,6 +380,67 @@ public class MusicPlayer : MonoBehaviour
         return true;
     }
 
+    /// <summary> Returns true if no audiosource is currently playing a clip</summary>
+    public bool AllClipsNotPlaying()
+    {
+        for (int i = 0; i < audioSources.Length; i++)
+        {
+            if (audioSources[i].isPlaying)
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /// <summary> Find the first active instruments in the playing track.</summary>
+    /// <returns> The integer corresponding to the audioSource found that has an active instrument </returns>
+    private int FirstActiveClip()
+    {
+        for (int i = 0; i < audioSources.Length; i++)
+        {
+            if (activeClip[i])
+            {
+                return i;
+            }
+        }
+        return 0;
+    }
+
+    /// <summary> Check if volume slider what used, if so update globalVolume. Will override individual instruments volumes </summary>
+    private void UpdateGlobalVolumeInspector()
+    {
+        if (globalVolume != lastGlobalVolume)
+        {
+            globalVolume = (float)Math.Round(globalVolume, 3);
+            for (int i = 0; i < audioSources.Length; i++)
+            {
+                if (audioSources[i].volume != 0)
+                {
+                    audioSources[i].volume = globalVolume;
+                }
+            }
+        }
+        lastGlobalVolume = globalVolume;
+    }
+
+    /// <summary> Check if volume slider what used, if so update globalVolume. Will override individual instruments volumes </summary>
+    private void UpdateGlobalFrequencyInspector()
+    {
+        if (globalCutoffFreq != lastGlobalCutoffFreq)
+        {
+            for (int i = 0; i < audioSources.Length; i++)
+            {
+                if (audioSources[i].volume != 0)
+                {
+                    lowFilters[i].cutoffFrequency = globalCutoffFreq;
+                }
+            }
+        }
+        lastGlobalCutoffFreq = globalCutoffFreq;
+    }
+
+    /// <summary> Used to keep the code more clean by moving att redundant and long debug log to the end of the file </summary>
     private void ErrorLog(int logToPrint)
     {
         switch (logToPrint)
@@ -302,11 +471,11 @@ public class MusicPlayerEditor : Editor
         }
         if (GUILayout.Button("Play Track 01"))
         {
-            musicPlayer.EnableMusicTrack(musicPlayer.musicTrack01);
+            musicPlayer.PlayMusicTrack(musicPlayer.musicTrack01);
         }
         if (GUILayout.Button("Play Track 02"))
         {
-            musicPlayer.EnableMusicTrack(musicPlayer.musicTrack02);
+            musicPlayer.PlayMusicTrack(musicPlayer.musicTrack02);
         }
         if (GUILayout.Button("Mute all"))
         {
@@ -314,12 +483,14 @@ public class MusicPlayerEditor : Editor
         }
         if (GUILayout.Button("Toggle low pass filter"))
         {
-            musicPlayer.ToggleFilter();
+            musicPlayer.ToggleLowPassFilters();
         }
         if (GUILayout.Button("Display actives instruments"))
         {
-            musicPlayer.DisplayActive();
+            musicPlayer.PrintClip();
         }
     }
 }
 #endif
+
+// double clipDuration = (double)musicTrack01[0].samples / musicTrack01[0].frequency;
