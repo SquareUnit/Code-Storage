@@ -1,6 +1,9 @@
 // Création du script : Felix Desrosiers-Dorval
 // Date : 02-04-2019 16:15
 
+/// Solid design, might need some adaptations later on when seriously reworking the camera
+/// The states need to be non monobehaviour, implement the IStates interface and know the camera through their constructor
+
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
@@ -45,3 +48,19 @@ public class StateMachine : MonoBehaviour
         currentState.Enter();
     }
 }
+
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+
+public interface IStates
+{
+    void Enter();
+
+    void IfStateChange();
+
+    void StateUpdate();
+
+    void Exit();
+}
+
