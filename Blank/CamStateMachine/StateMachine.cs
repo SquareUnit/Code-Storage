@@ -1,7 +1,9 @@
-// Création du script : Felix Desrosiers-Dorval
-// Date : 02-04-2019 16:15
+/// Designed by Félix Desrosiers-Dorval
+/// Last modification date : 2019-07-01
+/// Last feature added : Added the interface class to the same file.
+/// https://github.com/SquareUnit/Code-Storage
 
-/// Solid design, might need some adaptations later on when seriously reworking the camera
+/// Solid design, might need some adaptations later on when seriously reworking the camera.
 /// The states need to be non monobehaviour, implement the IStates interface and know the camera through their constructor
 
 using System.Collections;
