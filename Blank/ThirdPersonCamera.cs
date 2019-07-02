@@ -1,5 +1,12 @@
-///Creation date : 03-04-19
-///Par: Felix Desrosiers-Dorval
+/// Designed by Félix Desrosiers-Dorval
+/// Last modification date : 2019-07-01
+/// Last feature added : 
+/// https://github.com/SquareUnit/Code-Storage
+
+/// The camera work as intended in almost every possible case so far. Wall collision
+/// behaviour still has a jittering glitch in certain precise consitions that need to be fixed.
+/// The script is also waiting the possibility to handle wall collision with ceilings. I might
+/// rewrite this whole code completely before handling that.
 
 using System.Collections;
 using System.Collections.Generic;
