@@ -1,3 +1,10 @@
+/// Designed by Félix Desrosiers-Dorval
+/// Last modification date : 2019-07-01
+/// Last feature added : 
+/// https://github.com/SquareUnit/Code-Storage
+
+/// Will need to be splitted into two states, one for movements and one for immobility
+
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
