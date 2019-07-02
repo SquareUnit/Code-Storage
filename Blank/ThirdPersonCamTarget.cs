@@ -1,3 +1,8 @@
+/// Designed by Félix Desrosiers-Dorval
+/// Last modification date : 2019-07-01
+/// Last feature added : Positioning now behave differently when camera is in reveal state
+/// https://github.com/SquareUnit/Code-Storage
+
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
