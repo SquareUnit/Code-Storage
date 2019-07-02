@@ -1,3 +1,10 @@
+/// Designed by Félix Desrosiers-Dorval
+/// Last modification date : 2019-07-01
+/// Last feature added : LowPassFilter slider now updating when valus is changed
+/// https://github.com/SquareUnit/Code-Storage
+
+/// Maths need a serious rework. They function properly but are fragile.
+
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
